@@ -52,7 +52,7 @@ jobs:
 
       - name: Deploy both bridges to GKE (namespace otd)
         run: |
-          gcloud container clusters get-credentials "${GKE_CLUSTER}" --region "${REGION}" --project "${{ vars.GCP_PROJECT_ID }}"
+          gcloud container clusters get-credentials "${GKE_CLUSTER}" --region "${{ vars.GKE_LOCATION || 'us-east1' }}" --project "${{ vars.GCP_PROJECT_ID }}"
           for m in jms-to-pubsub-bridge pubsub-to-jms-bridge; do
             overlay="$m/deploy/k8s/overlays/gcp"
             sed -i "s/PROJECT_ID/${{ vars.GCP_PROJECT_ID }}/g" "$m/deploy/k8s/base/"*.yaml "$overlay/kustomization.yaml"
