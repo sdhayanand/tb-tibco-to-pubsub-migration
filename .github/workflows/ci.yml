@@ -21,7 +21,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '21', cache: maven }
-      - run: mvn -B -ntp verify
+      - name: mvn verify
+        shell: bash
+        run: |
+          set -o pipefail
+          mvn -B -ntp verify 2>&1 | tee build.log
+      - name: publish build errors as annotations
+        if: failure()
+        shell: bash
+        run: |
+          # Annotations are visible on the public run page without signing in.
+          grep -E '^\[ERROR\]|FAILURE!|Tests run:.*(Failures: [1-9]|Errors: [1-9])|BUILD FAILURE|Caused by:|Exception' build.log \
+            | grep -vE '^\[ERROR\] *$|Re-run Maven|full stack trace|Help 1|-> \[Help|For more information|To see the full' \
+            | awk '!seen[$0]++' | head -n 45 | while IFS= read -r line; do
+              msg="${line//'%'/'%25'}"; msg="${msg:0:900}"
+              echo "::error title=build::${msg}"
+            done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -68,9 +83,9 @@ jobs:
         with: { distribution: temurin, java-version: '21', cache: maven }
       - run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Build migration-common
-        run: mvn -B -ntp -DskipTests -pl migration-common install
+        run: mvn -B -ntp -DskipTests -pl migration-common -am install
       - name: Jib push ${{ matrix.module }}
         run: >-
-          mvn -B -ntp -DskipTests -pl ${{ matrix.module }} jib:build
+          mvn -B -ntp -DskipTests -pl ${{ matrix.module }} -am compile jib:build
           -Dimage=ghcr.io/sdhayanand/tb-${{ matrix.module }}:${{ github.sha }}
           -Djib.to.tags=latest
