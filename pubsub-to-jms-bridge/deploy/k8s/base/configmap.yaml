@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pubsub-to-jms-bridge
+data:
+  JMS_PROVIDER: "ibmmq"
+  MQ_QMGR: "QM1"
+  MQ_CHANNEL: "DEV.APP.SVRCONN"
+  MQ_HOST: "ibm-mq.legacy.svc.cluster.local"
+  MQ_PORT: "1414"
+  JMS_DESTINATION: "ERP.ORDERS.IN"
+  JMS_DESTINATION_TYPE: "queue"
+  SOURCE_SUBSCRIPTION: "orders-to-legacy-mq"
+  DLQ_TOPIC: "events-dlq"
+  MIGRATION_PHASE: "LEGACY_ONLY"
+  MIGRATION_CONTROL_SUBSCRIPTION: "migration-control-pubsub-to-jms"
+  SPRING_PROFILES_ACTIVE: "gcp"

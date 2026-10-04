@@ -1,0 +1,6 @@
+{"eventId":"e1","eventType":"ORDER_CREATED","eventTime":"2026-10-03T10:00:01Z","schemaVersion":"1","source":"TIBCO_EMS_BRIDGE","legacyMessageId":"ID:EMS.1","order":{"orderId":"ORD-2026-000101","orderType":"TAILORED","storeId":"0412","totalAmount":649.99,"lines":[{"lineNumber":1,"sku":"A","quantity":1,"unitPrice":599.99},{"lineNumber":2,"sku":"B","quantity":1,"unitPrice":50.00}]}}
+{"eventId":"e2","eventType":"ORDER_CREATED","eventTime":"2026-10-03T10:05:01Z","schemaVersion":"1","source":"TIBCO_EMS_BRIDGE","legacyMessageId":"ID:EMS.2","order":{"orderId":"ORD-2026-000102","orderType":"RENTAL","storeId":"0088","totalAmount":199.00,"lines":[{"lineNumber":1,"sku":"R","quantity":1,"unitPrice":199.00}]}}
+{"order_id":"ORD-2026-000103","total_amount":"1250.50","line_count":2,"event_time":"2026-10-03 10:10:01.000000 UTC","legacy_message_id":"ID:EMS.3"}
+{"order_id":"ORD-2026-000104","total_amount":"89.95","line_count":1,"event_time":"2026-10-03 10:15:01 UTC","legacy_message_id":"ID:EMS.4"}
+{"eventId":"e6","eventType":"ORDER_CREATED","eventTime":"2026-10-03T11:00:00Z","schemaVersion":"1","source":"ORDER_INTAKE_API","order":{"orderId":"ORD-2026-000106","orderType":"ECOM","storeId":"0999","totalAmount":42.00,"lines":[{"lineNumber":1,"sku":"E","quantity":1,"unitPrice":42.00}]}}
+this line is not json and must be skipped

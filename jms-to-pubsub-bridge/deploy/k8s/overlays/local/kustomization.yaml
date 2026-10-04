@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: otd
+resources:
+  - ../../base
+patches:
+  - target:
+      kind: ConfigMap
+      name: jms-to-pubsub-bridge
+    patch: |-
+      - op: replace
+        path: /data/JMS_PROVIDER
+        value: artemis
+      - op: replace
+        path: /data/MIGRATION_PHASE
+        value: SHADOW
+      - op: replace
+        path: /data/SPRING_PROFILES_ACTIVE
+        value: local
+      - op: add
+        path: /data/PUBSUB_EMULATOR_HOST
+        value: pubsub-emulator.legacy.svc.cluster.local:8085
+      - op: replace
+        path: /data/MIGRATION_CONTROL_SUBSCRIPTION
+        value: ""

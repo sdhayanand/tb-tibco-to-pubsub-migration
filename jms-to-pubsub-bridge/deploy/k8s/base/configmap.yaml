@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jms-to-pubsub-bridge
+data:
+  # "ems" against a real TIBCO EMS (needs tibjms.jar, see README -Pems). The GKE demo estate runs the
+  # Artemis-based ems-broker in namespace `legacy`, so the stand-in provider is used there.
+  JMS_PROVIDER: "artemis"
+  JMS_SOURCE: "TB.ORDERS.OUT"
+  JMS_SOURCE_TYPE: "queue"
+  TARGET_TOPIC: "orders-v1"
+  DLQ_TOPIC: "events-dlq"
+  DEFAULT_EVENT_TYPE: "ORDER_CREATED"
+  BRIDGE_CONCURRENCY: "1"
+  MIGRATION_PHASE: "LEGACY_ONLY"
+  MIGRATION_CONTROL_SUBSCRIPTION: "migration-control-jms-to-pubsub"
+  SPRING_PROFILES_ACTIVE: "gcp"

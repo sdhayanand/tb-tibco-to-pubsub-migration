@@ -1,0 +1,118 @@
+# Local end-to-end of the migration slice:
+#   artemis (EMS stand-in)  ──TB.ORDERS.OUT──▶ jms-to-pubsub-bridge ──▶ pubsub emulator orders-v1
+#   ibm-mq  (ERP side)      ◀──ERP.ORDERS.IN── pubsub-to-jms-bridge ◀── orders-to-legacy-mq
+#
+#   docker compose up -d --build
+#   ./local/send-legacy-order.sh ORD-1 0412          # XML on Artemis → JSON on the emulator
+#   ./local/publish-phase.sh DUAL_RUN                 # turns the Pub/Sub→MQ bridge on
+#   curl -s localhost:8090/actuator/bridge ; curl -s localhost:8091/actuator/bridge
+#
+# IBM MQ is optional (profile "mq"): docker compose --profile mq up -d
+services:
+  artemis:
+    image: apache/activemq-artemis:latest-alpine
+    environment:
+      ARTEMIS_USER: artemis
+      ARTEMIS_PASSWORD: artemis
+      ANONYMOUS_LOGIN: "false"
+    ports:
+      - "61616:61616"   # JMS (CORE/AMQP/OpenWire)
+      - "8161:8161"     # web console (artemis/artemis)
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 61616 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    command: ["gcloud", "beta", "emulators", "pubsub", "start", "--host-port=0.0.0.0:8085", "--project=tb-local"]
+    ports:
+      - "8085:8085"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8085/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  pubsub-init:
+    image: curlimages/curl:8.10.1
+    depends_on:
+      pubsub-emulator:
+        condition: service_healthy
+    environment:
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      PUBSUB_PROJECT: tb-local
+    volumes:
+      - ./local/pubsub-init.sh:/init.sh:ro
+    entrypoint: ["sh", "/init.sh"]
+    restart: "no"
+
+  ibm-mq:
+    profiles: ["mq"]
+    image: icr.io/ibm-messaging/mq:latest
+    environment:
+      LICENSE: accept
+      MQ_QMGR_NAME: QM1
+      MQ_APP_PASSWORD: passw0rd
+      MQ_ADMIN_PASSWORD: passw0rd
+    ports:
+      - "1414:1414"
+      - "9443:9443"     # MQ console (admin/passw0rd)
+
+  jms-to-pubsub-bridge:
+    build:
+      context: .
+      dockerfile: jms-to-pubsub-bridge/Dockerfile
+    image: ghcr.io/sdhayanand/tb-jms-to-pubsub-bridge:local
+    depends_on:
+      artemis:
+        condition: service_healthy
+      pubsub-init:
+        condition: service_completed_successfully
+    environment:
+      JMS_PROVIDER: artemis
+      JMS_URL: tcp://artemis:61616
+      JMS_USER: artemis
+      JMS_PASSWORD: artemis
+      JMS_SOURCE: TB.ORDERS.OUT
+      TARGET_TOPIC: orders-v1
+      DLQ_TOPIC: events-dlq
+      PUBSUB_PROJECT: tb-local
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      MIGRATION_PHASE: SHADOW
+      MIGRATION_CONTROL_SUBSCRIPTION: migration-control-jms-to-pubsub
+    ports:
+      - "8090:8090"
+
+  pubsub-to-jms-bridge:
+    build:
+      context: .
+      dockerfile: pubsub-to-jms-bridge/Dockerfile
+    image: ghcr.io/sdhayanand/tb-pubsub-to-jms-bridge:local
+    depends_on:
+      artemis:
+        condition: service_healthy
+      pubsub-init:
+        condition: service_completed_successfully
+    environment:
+      # Artemis plays the ERP's MQ here; switch to the real thing with the "mq" profile:
+      #   JMS_PROVIDER=ibmmq MQ_HOST=ibm-mq MQ_PORT=1414 MQ_QMGR=QM1 MQ_CHANNEL=DEV.APP.SVRCONN
+      #   JMS_USER=app JMS_PASSWORD=passw0rd JMS_DESTINATION=DEV.QUEUE.1
+      JMS_PROVIDER: ${PUBSUB_TO_JMS_PROVIDER:-artemis}
+      JMS_URL: tcp://artemis:61616
+      JMS_USER: ${PUBSUB_TO_JMS_USER:-artemis}
+      JMS_PASSWORD: ${PUBSUB_TO_JMS_PASSWORD:-artemis}
+      MQ_HOST: ibm-mq
+      MQ_PORT: "1414"
+      MQ_QMGR: QM1
+      MQ_CHANNEL: DEV.APP.SVRCONN
+      JMS_DESTINATION: ${PUBSUB_TO_JMS_DESTINATION:-ERP.ORDERS.IN}
+      SOURCE_SUBSCRIPTION: orders-to-legacy-mq
+      DLQ_TOPIC: events-dlq
+      PUBSUB_PROJECT: tb-local
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      MIGRATION_PHASE: DUAL_RUN
+      MIGRATION_CONTROL_SUBSCRIPTION: migration-control-pubsub-to-jms
+    ports:
+      - "8091:8091"

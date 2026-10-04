@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jms-to-pubsub-bridge
+spec:
+  replicas: 1                      # single consumer keeps queue FIFO → ordering key order
+  strategy:
+    type: Recreate                 # never two consumers on the queue during a rollout
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jms-to-pubsub-bridge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jms-to-pubsub-bridge
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8090"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      serviceAccountName: jms-to-pubsub-bridge
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: bridge
+          image: ghcr.io/sdhayanand/tb-jms-to-pubsub-bridge:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8090
+          envFrom:
+            - configMapRef:
+                name: jms-to-pubsub-bridge
+          env:
+            - name: JMS_URL
+              valueFrom:
+                secretKeyRef: { name: otd-jms, key: url }
+            - name: JMS_USER
+              valueFrom:
+                secretKeyRef: { name: otd-jms, key: username }
+            - name: JMS_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: otd-jms, key: password }
+            - name: PUBSUB_PROJECT
+              value: "PROJECT_ID"
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits: { cpu: "1", memory: "768Mi" }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            initialDelaySeconds: 40
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

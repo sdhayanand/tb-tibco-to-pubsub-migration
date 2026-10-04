@@ -1,0 +1,2 @@
+{"xml":"<Order><OrderNbr>ORD-X-1</OrderNbr><OrderType>R</OrderType><StoreNbr>0001</StoreNbr><OrderDate>2026-10-03T12:00:00Z</OrderDate><TotalAmt>10.00</TotalAmt><Lines><Line><LineNbr>1</LineNbr><SKU>S</SKU><Qty>1</Qty><UnitPrice>10.00</UnitPrice><FulfillType>P</FulfillType></Line></Lines></Order>","messageId":"ID:EMS.X1"}
+{"orderId":"ORD-X-2","totalAmount":20,"lineCount":2,"timestamp":1790000000000,"messageId":"ID:EMS.X2"}

@@ -1,0 +1,12 @@
+# A single-replica Recreate deployment: the PDB only documents that voluntary disruption
+# (node drain) is allowed to take the one pod; the bridge is at-least-once and resumes
+# from the queue. No HPA on purpose: scaling out would break per-queue ordering.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: jms-to-pubsub-bridge
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jms-to-pubsub-bridge

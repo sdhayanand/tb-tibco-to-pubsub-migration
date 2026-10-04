@@ -1,0 +1,78 @@
+spring:
+  application:
+    name: pubsub-to-jms-bridge
+  main:
+    banner-mode: off
+  jmx:
+    enabled: false
+
+server:
+  port: ${SERVER_PORT:8091}
+  shutdown: graceful
+
+# --- JMS target (IBM MQ in prod, Artemis locally/CI, EMS optional) ----------------------------
+jms:
+  provider: ${JMS_PROVIDER:artemis}          # artemis | ibmmq | ems
+  url: ${JMS_URL:tcp://localhost:61616}
+  user: ${JMS_USER:}
+  password: ${JMS_PASSWORD:}
+  mq:                                        # ibmmq only
+    qmgr: ${MQ_QMGR:QM1}
+    channel: ${MQ_CHANNEL:DEV.APP.SVRCONN}
+    host: ${MQ_HOST:localhost}
+    port: ${MQ_PORT:1414}
+    app-name: ${MQ_APP_NAME:pubsub-to-jms-bridge}
+
+# --- Bridge behaviour ------------------------------------------------------------------------
+bridge:
+  source-subscription: ${SOURCE_SUBSCRIPTION:orders-to-legacy-mq}
+  destination: ${JMS_DESTINATION:ERP.ORDERS.IN}     # IBM MQ + non-JMS consumer: queue:///ERP.ORDERS.IN?targetClient=1
+  destination-type: ${JMS_DESTINATION_TYPE:queue}
+  dlq-topic: ${DLQ_TOPIC:events-dlq}
+  flow-control-messages: ${BRIDGE_FLOW_CONTROL:100}
+  loop-guard-source: TIBCO_EMS_BRIDGE
+  delivery-attempts-before-dlq: ${BRIDGE_DELIVERY_ATTEMPTS_BEFORE_DLQ:5}
+
+# --- Pub/Sub ---------------------------------------------------------------------------------
+pubsub:
+  project: ${PUBSUB_PROJECT:tb-local}
+  emulator-host: ${PUBSUB_EMULATOR_HOST:}
+
+# --- Migration phase --------------------------------------------------------------------------
+migration:
+  phase: ${MIGRATION_PHASE:LEGACY_ONLY}
+  control-subscription: ${MIGRATION_CONTROL_SUBSCRIPTION:}   # e.g. migration-control-pubsub-to-jms
+
+# --- Actuator ---------------------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,bridge
+  health:
+    jms:
+      enabled: false
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,bridge
+        liveness:
+          include: livenessState
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    root: INFO
+    com.tailoredbrands.otd: INFO
+    org.apache.activemq.artemis: WARN
+    com.ibm.msg.client: WARN

@@ -1,0 +1,66 @@
+name: deploy-gcp
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+  AR_REPO: ${{ vars.AR_REPO || 'tb-otd' }}
+  GKE_CLUSTER: ${{ vars.GKE_CLUSTER || 'tb-otd-autopilot' }}
+
+jobs:
+  deploy:
+    if: vars.GCP_PROJECT_ID != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21', cache: maven }
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SA }}
+          token_format: access_token
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: gke-gcloud-auth-plugin
+
+      - name: Build migration-common
+        run: mvn -B -ntp -DskipTests -pl migration-common install
+
+      - name: Jib push to Artifact Registry
+        run: |
+          for m in jms-to-pubsub-bridge pubsub-to-jms-bridge reconciler; do
+            mvn -B -ntp -DskipTests -pl "$m" jib:build \
+              -Dimage="${REGION}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${AR_REPO}/${m}:${{ github.sha }}" \
+              -Djib.to.tags=latest \
+              -Djib.to.auth.username=oauth2accesstoken \
+              -Djib.to.auth.password='${{ steps.auth.outputs.access_token }}'
+          done
+
+      - name: Replace reconciler Cloud Run Job
+        run: |
+          sed -i "s/PROJECT_ID/${{ vars.GCP_PROJECT_ID }}/g" reconciler/deploy/cloudrun/job.yaml
+          sed -i "s#/reconciler:latest#/reconciler:${{ github.sha }}#" reconciler/deploy/cloudrun/job.yaml
+          gcloud run jobs replace reconciler/deploy/cloudrun/job.yaml --region "${REGION}" --quiet
+
+      - name: Deploy both bridges to GKE (namespace otd)
+        run: |
+          gcloud container clusters get-credentials "${GKE_CLUSTER}" --region "${REGION}" --project "${{ vars.GCP_PROJECT_ID }}"
+          for m in jms-to-pubsub-bridge pubsub-to-jms-bridge; do
+            overlay="$m/deploy/k8s/overlays/gcp"
+            sed -i "s/PROJECT_ID/${{ vars.GCP_PROJECT_ID }}/g" "$m/deploy/k8s/base/"*.yaml "$overlay/kustomization.yaml"
+            sed -i "s#us-central1-docker.pkg.dev#${REGION}-docker.pkg.dev#; s#/tb-otd/#/${AR_REPO}/#; s#newTag: latest#newTag: ${{ github.sha }}#" "$overlay/kustomization.yaml"
+            kubectl apply -k "$overlay"
+          done
+          kubectl -n otd rollout status deploy/jms-to-pubsub-bridge --timeout=180s
+          kubectl -n otd rollout status deploy/pubsub-to-jms-bridge --timeout=180s
+          kubectl -n otd get deploy,pod -l app.kubernetes.io/component=migration-bridge

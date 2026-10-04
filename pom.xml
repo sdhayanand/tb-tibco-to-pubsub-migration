@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.5.6</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.tailoredbrands.otd</groupId>
+  <artifactId>tb-tibco-to-pubsub-migration</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>tb-tibco-to-pubsub-migration</name>
+  <description>TIBCO EMS / IBM MQ to Cloud Pub/Sub migration bridges and reconciler (Tailored Brands OTD)</description>
+
+  <modules>
+    <module>migration-common</module>
+    <module>jms-to-pubsub-bridge</module>
+    <module>pubsub-to-jms-bridge</module>
+    <module>reconciler</module>
+  </modules>
+
+  <properties>
+    <java.version>21</java.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <libraries-bom.version>26.60.0</libraries-bom.version>
+    <testcontainers.version>1.21.3</testcontainers.version>
+    <ibm-mq.version>9.4.2.0</ibm-mq.version>
+    <tibjms.version>10.3.0</tibjms.version>
+    <logstash-logback-encoder.version>8.1</logstash-logback-encoder.version>
+    <jib.version>3.4.5</jib.version>
+    <surefire.version>3.5.3</surefire.version>
+    <failsafe.version>3.5.3</failsafe.version>
+
+    <!-- Default image name; CI overrides with -Dimage=... (GHCR) or the Artifact Registry path. -->
+    <image>ghcr.io/sdhayanand/tb-${project.artifactId}</image>
+    <jib.from.image>eclipse-temurin:21-jre</jib.from.image>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.google.cloud</groupId>
+        <artifactId>libraries-bom</artifactId>
+        <version>${libraries-bom.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.tailoredbrands.otd</groupId>
+        <artifactId>migration-common</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.ibm.mq</groupId>
+        <artifactId>com.ibm.mq.jakarta.client</artifactId>
+        <version>${ibm-mq.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>net.logstash.logback</groupId>
+        <artifactId>logstash-logback-encoder</artifactId>
+        <version>${logstash-logback-encoder.version}</version>
+      </dependency>
+      <!--
+        TIBCO EMS client. NOT on Maven Central. Install from your EMS distribution:
+          mvn install:install-file -Dfile=lib/tibjms.jar -DgroupId=com.tibco \
+              -DartifactId=tibjms -Dversion=10.3.0 -Dpackaging=jar
+        and build with -Pems. The code only touches it via reflection, so nothing
+        needs it at compile time.
+      -->
+      <dependency>
+        <groupId>com.tibco</groupId>
+        <artifactId>tibjms</artifactId>
+        <version>${tibjms.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${surefire.version}</version>
+          <configuration>
+            <!-- Unit tests only; *IT classes are run by failsafe in the verify phase. -->
+            <excludes>
+              <exclude>**/*IT.java</exclude>
+            </excludes>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>${failsafe.version}</version>
+          <executions>
+            <execution>
+              <goals>
+                <goal>integration-test</goal>
+                <goal>verify</goal>
+              </goals>
+            </execution>
+          </executions>
+          <configuration>
+            <includes>
+              <include>**/*IT.java</include>
+            </includes>
+            <!-- Allows "-Dit.test=IbmMqBridgeIT -pl pubsub-to-jms-bridge -am" without failing modules
+                 that have no matching IT. -->
+            <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>com.google.cloud.tools</groupId>
+          <artifactId>jib-maven-plugin</artifactId>
+          <version>${jib.version}</version>
+          <configuration>
+            <from>
+              <image>${jib.from.image}</image>
+            </from>
+            <to>
+              <image>${image}</image>
+              <tags>
+                <tag>latest</tag>
+              </tags>
+            </to>
+            <container>
+              <user>1000:1000</user>
+              <creationTime>USE_CURRENT_TIMESTAMP</creationTime>
+              <jvmFlags>
+                <jvmFlag>-XX:MaxRAMPercentage=75.0</jvmFlag>
+                <jvmFlag>-Djava.security.egd=file:/dev/./urandom</jvmFlag>
+              </jvmFlags>
+              <labels>
+                <org.opencontainers.image.source>https://github.com/sdhayanand/tb-tibco-to-pubsub-migration</org.opencontainers.image.source>
+              </labels>
+            </container>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+  <profiles>
+    <!--
+      -Pems : adds the TIBCO EMS client at runtime (and therefore into the Jib image).
+      Requires lib/tibjms.jar to be installed in the local repository (see dependencyManagement).
+    -->
+    <profile>
+      <id>ems</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.tibco</groupId>
+          <artifactId>tibjms</artifactId>
+          <scope>runtime</scope>
+        </dependency>
+      </dependencies>
+    </profile>
+  </profiles>
+</project>

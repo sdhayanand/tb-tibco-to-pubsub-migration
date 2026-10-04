@@ -1,0 +1,63 @@
+# Alternative to the Cloud Run Job: run the reconciler from inside the GKE cluster (same network
+# as the EMS/MQ simulators in docker-compose / the `legacy` namespace).
+#   kubectl apply -f reconciler/deploy/k8s/cronjob.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: reconciler
+  namespace: otd
+  labels:
+    app.kubernetes.io/name: reconciler
+    app.kubernetes.io/part-of: tb-otd
+spec:
+  schedule: "15 1 * * *"          # 01:15 UTC daily, reconciles the previous UTC day
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 7
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: reconciler
+        spec:
+          serviceAccountName: tb-reconciler
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+          containers:
+            - name: reconciler
+              image: ghcr.io/sdhayanand/tb-reconciler:latest
+              args:
+                - "--from=$(FROM_TS)"
+                - "--to=$(TO_TS)"
+                - "--legacyQueue=TB.ORDERS.AUDIT"
+                - "--bigQueryDataset=otd"
+              env:
+                - name: FROM_TS
+                  value: "2026-10-03T00:00:00Z"   # the Composer DAG / scheduler patches these per run
+                - name: TO_TS
+                  value: "2026-10-04T00:00:00Z"
+                - name: PUBSUB_PROJECT
+                  value: PROJECT_ID
+                - name: MIGRATION_PHASE
+                  valueFrom:
+                    configMapKeyRef: { name: jms-to-pubsub-bridge, key: MIGRATION_PHASE }
+                - name: JMS_PROVIDER
+                  value: ems
+                - name: JMS_URL
+                  valueFrom:
+                    secretKeyRef: { name: otd-jms, key: url }
+                - name: JMS_USER
+                  valueFrom:
+                    secretKeyRef: { name: otd-jms, key: username }
+                - name: JMS_PASSWORD
+                  valueFrom:
+                    secretKeyRef: { name: otd-jms, key: password }
+                - name: SPRING_PROFILES_ACTIVE
+                  value: gcp
+              resources:
+                requests: { cpu: "250m", memory: "512Mi" }
+                limits: { cpu: "1", memory: "1Gi" }

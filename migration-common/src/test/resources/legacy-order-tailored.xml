@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Order>
+  <OrderNbr>ORD-2026-000123</OrderNbr>
+  <OrderType>T</OrderType>
+  <StoreNbr>0412</StoreNbr>
+  <CustNbr>C-77812</CustNbr>
+  <OrderDate>2026-10-03T22:14:00Z</OrderDate>
+  <PromiseDate>2026-10-10</PromiseDate>
+  <Currency>USD</Currency>
+  <TotalAmt>649.99</TotalAmt>
+  <Lines>
+    <Line>
+      <LineNbr>1</LineNbr>
+      <SKU>MW-SUIT-NAVY-42R</SKU>
+      <Qty>1</Qty>
+      <UnitPrice>599.99</UnitPrice>
+      <FulfillType>P</FulfillType>
+    </Line>
+    <Line>
+      <LineNbr>2</LineNbr>
+      <SKU>ALT-HEM-TROUSER</SKU>
+      <Qty>1</Qty>
+      <UnitPrice>50.00</UnitPrice>
+      <FulfillType>A</FulfillType>
+      <Alteration>
+        <AltType>HEM</AltType>
+        <Measure>31.5</Measure>
+        <TailorShop>TS-EASTBAY</TailorShop>
+      </Alteration>
+    </Line>
+  </Lines>
+</Order>

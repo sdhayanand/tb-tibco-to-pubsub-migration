@@ -1,0 +1,21 @@
+# Maven
+target/
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+# TIBCO EMS client is licensed software: never commit it (install it locally, see README)
+lib/
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+# OS / misc
+.DS_Store
+*.log
+/reports/
+# local secrets
+.env
+*.local.yml
+.venv/

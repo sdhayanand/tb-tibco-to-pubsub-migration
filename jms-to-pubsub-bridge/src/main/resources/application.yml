@@ -1,0 +1,82 @@
+spring:
+  application:
+    name: jms-to-pubsub-bridge
+  main:
+    banner-mode: off
+  jmx:
+    enabled: false
+
+server:
+  port: ${SERVER_PORT:8090}
+  shutdown: graceful
+
+# --- JMS source (TIBCO EMS in prod, Artemis locally/CI, IBM MQ optional) ---------------------
+jms:
+  provider: ${JMS_PROVIDER:artemis}          # artemis | ibmmq | ems
+  url: ${JMS_URL:tcp://localhost:61616}      # artemis/ems URL (ems: tcp://ems-host:7222)
+  user: ${JMS_USER:}
+  password: ${JMS_PASSWORD:}
+  mq:                                        # ibmmq only
+    qmgr: ${MQ_QMGR:QM1}
+    channel: ${MQ_CHANNEL:DEV.APP.SVRCONN}
+    host: ${MQ_HOST:localhost}
+    port: ${MQ_PORT:1414}
+    app-name: ${MQ_APP_NAME:jms-to-pubsub-bridge}
+
+# --- Bridge behaviour ------------------------------------------------------------------------
+bridge:
+  source: ${JMS_SOURCE:TB.ORDERS.OUT}
+  source-type: ${JMS_SOURCE_TYPE:queue}      # queue | topic (durable subscription)
+  client-id: ${JMS_CLIENT_ID:}
+  durable-name: ${JMS_DURABLE_NAME:}
+  selector: ${JMS_SELECTOR:}
+  concurrency: ${BRIDGE_CONCURRENCY:1}       # keep 1 to preserve queue order
+  target-topic: ${TARGET_TOPIC:orders-v1}
+  dlq-topic: ${DLQ_TOPIC:events-dlq}
+  default-event-type: ${DEFAULT_EVENT_TYPE:ORDER_CREATED}
+  max-delivery-attempts: ${BRIDGE_MAX_DELIVERY_ATTEMPTS:5}
+  publish-timeout: ${BRIDGE_PUBLISH_TIMEOUT:30s}
+  receive-timeout: 1s
+
+# --- Pub/Sub ---------------------------------------------------------------------------------
+pubsub:
+  project: ${PUBSUB_PROJECT:tb-local}
+  emulator-host: ${PUBSUB_EMULATOR_HOST:}
+
+# --- Migration phase --------------------------------------------------------------------------
+migration:
+  phase: ${MIGRATION_PHASE:LEGACY_ONLY}
+  control-subscription: ${MIGRATION_CONTROL_SUBSCRIPTION:}   # e.g. migration-control-jms-to-pubsub
+
+# --- Actuator ---------------------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,bridge
+  health:
+    jms:
+      enabled: false        # Boot's JmsHealthIndicator opens a broker connection per probe; BridgeHealthIndicator caches
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,bridge
+        liveness:
+          include: livenessState
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    root: INFO
+    com.tailoredbrands.otd: INFO
+    org.apache.activemq.artemis: WARN

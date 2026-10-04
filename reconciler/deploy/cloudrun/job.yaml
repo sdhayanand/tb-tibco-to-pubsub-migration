@@ -1,0 +1,50 @@
+# Cloud Run Job for the reconciler (one execution per run; scheduled by Cloud Scheduler).
+#   gcloud run jobs replace reconciler/deploy/cloudrun/job.yaml --region us-central1
+#   gcloud run jobs execute tb-reconciler --region us-central1 \
+#     --args="--from=2026-10-03T00:00:00Z,--to=2026-10-04T00:00:00Z,--phase=SHADOW,--bigQueryDataset=otd"
+# The legacy side comes from a JMS browse of TB.ORDERS.AUDIT, so the job needs the Serverless VPC
+# connector that reaches the EMS server (or use --legacyFile with an export uploaded to GCS + gcsfuse).
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: tb-reconciler
+  labels:
+    app.kubernetes.io/part-of: tb-otd
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/vpc-access-connector: tb-otd-connector
+        run.googleapis.com/vpc-access-egress: private-ranges-only
+    spec:
+      taskCount: 1
+      parallelism: 1
+      template:
+        spec:
+          serviceAccountName: tb-reconciler@PROJECT_ID.iam.gserviceaccount.com   # roles/bigquery.dataEditor + jobUser on otd
+          timeoutSeconds: 1800
+          maxRetries: 1
+          containers:
+            - image: us-central1-docker.pkg.dev/PROJECT_ID/tb-otd/reconciler:latest
+              args:
+                - "--legacyQueue=TB.ORDERS.AUDIT"
+                - "--bigQueryDataset=otd"
+                - "--bigQueryProject=PROJECT_ID"
+              env:
+                - name: JMS_PROVIDER
+                  value: ems
+                - name: JMS_URL
+                  valueFrom:
+                    secretKeyRef: { name: otd-jms-url, key: latest }
+                - name: JMS_USER
+                  valueFrom:
+                    secretKeyRef: { name: otd-jms-username, key: latest }
+                - name: JMS_PASSWORD
+                  valueFrom:
+                    secretKeyRef: { name: otd-jms-password, key: latest }
+                - name: MIGRATION_PHASE
+                  value: SHADOW
+                - name: SPRING_PROFILES_ACTIVE
+                  value: gcp
+              resources:
+                limits: { cpu: "1", memory: "1Gi" }
