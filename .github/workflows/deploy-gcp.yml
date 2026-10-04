@@ -39,7 +39,7 @@ jobs:
       - name: Jib push to Artifact Registry
         run: |
           for m in jms-to-pubsub-bridge pubsub-to-jms-bridge reconciler; do
-            mvn -B -ntp -DskipTests -pl "$m" -am compile jib:build \
+            mvn -B -ntp -DskipTests -pl "$m" compile jib:build \
               -Dimage="${REGION}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${AR_REPO}/${m}:${{ github.sha }}" \
               -Djib.to.tags=latest \
               -Djib.to.auth.username=oauth2accesstoken \

@@ -86,6 +86,6 @@ jobs:
         run: mvn -B -ntp -DskipTests -pl migration-common -am install
       - name: Jib push ${{ matrix.module }}
         run: >-
-          mvn -B -ntp -DskipTests -pl ${{ matrix.module }} -am compile jib:build
+          mvn -B -ntp -DskipTests -pl ${{ matrix.module }} compile jib:build
           -Dimage=ghcr.io/sdhayanand/tb-${{ matrix.module }}:${{ github.sha }}
           -Djib.to.tags=latest
