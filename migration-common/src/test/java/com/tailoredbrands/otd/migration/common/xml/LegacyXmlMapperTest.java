@@ -166,4 +166,13 @@ class LegacyXmlMapperTest {
                 "USD", new BigDecimal("15.00"), List.of(line), null, null);
         assertThat(mapper.parseOrder(mapper.toXml(order))).isEqualTo(order);
     }
+
+    @Test
+    void acceptsBareXsDateOrderDateFromTheOmsContract() {
+        // Found in the GCP smoke test: the EMS publisher sends <OrderDate>2026-10-05</OrderDate> (xs:date)
+        assertThat(LegacyXmlMapper.parseInstant("2026-10-05", "OrderDate"))
+                .isEqualTo(Instant.parse("2026-10-05T00:00:00Z"));
+        assertThat(LegacyXmlMapper.parseInstant("2026-10-05T08:15:00Z", "OrderDate"))
+                .isEqualTo(Instant.parse("2026-10-05T08:15:00Z"));
+    }
 }

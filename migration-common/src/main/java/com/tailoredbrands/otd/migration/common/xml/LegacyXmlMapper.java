@@ -405,7 +405,7 @@ public final class LegacyXmlMapper {
         return value == null ? null : value.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
-    /** Accepts RFC-3339 ("2026-10-03T22:14:00Z"), ISO local date-time and "yyyy-MM-dd HH:mm:ss" (both as UTC). */
+    /** Accepts RFC-3339 ("2026-10-03T22:14:00Z"), ISO local date-time, "yyyy-MM-dd HH:mm:ss" and a bare xs:date (all as UTC). */
     static Instant parseInstant(String value, String what) {
         if (value == null) {
             return null;
@@ -423,6 +423,13 @@ public final class LegacyXmlMapper {
         }
         try {
             return LocalDateTime.parse(v, LEGACY_DATETIME).toInstant(ZoneOffset.UTC);
+        } catch (DateTimeParseException ignored) {
+            // fall through
+        }
+        try {
+            // The OMS contract (oms.xsd) types OrderDate as xs:date, and TIBCO BW publishes it that way:
+            // treat a bare date as start of day UTC rather than dead-lettering the order.
+            return java.time.LocalDate.parse(v).atStartOfDay(ZoneOffset.UTC).toInstant();
         } catch (DateTimeParseException e) {
             throw new LegacyXmlException("Invalid timestamp in <" + what + ">: " + value, e);
         }
